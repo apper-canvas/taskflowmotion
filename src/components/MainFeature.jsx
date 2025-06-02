@@ -514,11 +514,19 @@ const MainFeature = () => {
                     >
                       Cancel
                     </button>
-                    <button
+<button
                       type="submit"
-                      className="flex-1 px-4 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-medium rounded-lg hover:shadow-card transition-all duration-200"
+                      disabled={isSubmittingTask}
+                      className="flex-1 px-4 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-medium rounded-lg hover:shadow-card transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {editingTask ? 'Update Task' : 'Create Task'}
+                      {isSubmittingTask ? (
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                          {editingTask ? 'Updating...' : 'Creating...'}
+                        </div>
+                      ) : (
+                        editingTask ? 'Update Task' : 'Create Task'
+                      )}
                     </button>
                   </div>
                 </form>

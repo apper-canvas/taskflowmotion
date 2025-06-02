@@ -10,6 +10,7 @@ import Callback from './pages/Callback';
 import ErrorPage from './pages/ErrorPage';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
+import Tasks from './pages/Tasks';
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
 
