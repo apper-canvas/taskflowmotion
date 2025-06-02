@@ -11,14 +11,14 @@ const MainFeature = () => {
     { id: 'work', name: 'Work', color: '#06b6d4', taskCount: 0 },
     { id: 'urgent', name: 'Urgent', color: '#ef4444', taskCount: 0 }
   ])
-  const [selectedProject, setSelectedProject] = useState('personal')
-const [editingTask, setEditingTask] = useState(null)
+const [selectedProject, setSelectedProject] = useState('personal')
+  const [editingTask, setEditingTask] = useState(null)
   const [filter, setFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [isSubmittingTask, setIsSubmittingTask] = useState(false)
+  const [showTaskForm, setShowTaskForm] = useState(false)
 
   const [taskForm, setTaskForm] = useState({
-    title: '',
     title: '',
     description: '',
     dueDate: '',
