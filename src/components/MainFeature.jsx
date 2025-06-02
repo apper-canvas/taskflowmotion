@@ -12,12 +12,13 @@ const MainFeature = () => {
     { id: 'urgent', name: 'Urgent', color: '#ef4444', taskCount: 0 }
   ])
   const [selectedProject, setSelectedProject] = useState('personal')
-  const [showTaskForm, setShowTaskForm] = useState(false)
-  const [editingTask, setEditingTask] = useState(null)
+const [editingTask, setEditingTask] = useState(null)
   const [filter, setFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [isSubmittingTask, setIsSubmittingTask] = useState(false)
 
   const [taskForm, setTaskForm] = useState({
+    title: '',
     title: '',
     description: '',
     dueDate: '',
@@ -56,7 +57,7 @@ const MainFeature = () => {
     setProjects(updatedProjects)
   }
 
-  const handleSubmitTask = (e) => {
+const handleSubmitTask = async (e) => {
     e.preventDefault()
     
     if (!taskForm.title.trim()) {
@@ -64,31 +65,40 @@ const MainFeature = () => {
       return
     }
 
-    const taskData = {
-      ...taskForm,
-      id: editingTask ? editingTask.id : Date.now().toString(),
-      projectId: selectedProject,
-      createdAt: editingTask ? editingTask.createdAt : new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
+    setIsSubmittingTask(true)
+    
+    try {
+      const taskData = {
+        ...taskForm,
+        id: editingTask ? editingTask.id : Date.now().toString(),
+        projectId: selectedProject,
+        createdAt: editingTask ? editingTask.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
 
-    if (editingTask) {
-      setTasks(prev => prev.map(task => task.id === editingTask.id ? taskData : task))
-      toast.success('Task updated successfully!')
-      setEditingTask(null)
-    } else {
-      setTasks(prev => [...prev, taskData])
-      toast.success('Task created successfully!')
-    }
+      if (editingTask) {
+        setTasks(prev => prev.map(task => task.id === editingTask.id ? taskData : task))
+        toast.success('Task updated successfully!')
+        setEditingTask(null)
+      } else {
+        setTasks(prev => [...prev, taskData])
+        toast.success('Task created successfully!')
+      }
 
-    setTaskForm({
-      title: '',
-      description: '',
-      dueDate: '',
-      priority: 'medium',
-      status: 'pending'
-    })
-    setShowTaskForm(false)
+      setTaskForm({
+        title: '',
+        description: '',
+        dueDate: '',
+        priority: 'medium',
+        status: 'pending'
+      })
+      setShowTaskForm(false)
+    } catch (error) {
+      console.error('Error submitting task:', error)
+      toast.error('Failed to save task. Please try again.')
+    } finally {
+      setIsSubmittingTask(false)
+    }
   }
 
   const handleEditTask = (task) => {
