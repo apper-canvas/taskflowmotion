@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'react-toastify'
 import { format, isToday, isPast, parseISO } from 'date-fns'
 import ApperIcon from './ApperIcon'
+import TaskService from '../services/TaskService'
 
 const MainFeature = () => {
   const [tasks, setTasks] = useState([])
@@ -11,12 +12,14 @@ const MainFeature = () => {
     { id: 'work', name: 'Work', color: '#06b6d4', taskCount: 0 },
     { id: 'urgent', name: 'Urgent', color: '#ef4444', taskCount: 0 }
   ])
-const [selectedProject, setSelectedProject] = useState('personal')
+  const [selectedProject, setSelectedProject] = useState('personal')
   const [editingTask, setEditingTask] = useState(null)
   const [filter, setFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [isSubmittingTask, setIsSubmittingTask] = useState(false)
   const [showTaskForm, setShowTaskForm] = useState(false)
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false)
+  const [isDeletingTask, setIsDeletingTask] = useState(null)
 
   const [taskForm, setTaskForm] = useState({
     title: '',
@@ -24,30 +27,30 @@ const [selectedProject, setSelectedProject] = useState('personal')
     dueDate: '',
     priority: 'medium',
     status: 'pending'
-  })
+})
 
-  // Load data from localStorage on mount
+  // Load tasks from database on mount
   useEffect(() => {
-    const savedTasks = localStorage.getItem('taskflow-tasks')
-    const savedProjects = localStorage.getItem('taskflow-projects')
-    
-    if (savedTasks) {
-      setTasks(JSON.parse(savedTasks))
-    }
-    if (savedProjects) {
-      setProjects(JSON.parse(savedProjects))
-    }
+    loadTasks()
   }, [])
-
-  // Save to localStorage whenever tasks or projects change
+  // Update project task counts whenever tasks change
   useEffect(() => {
-    localStorage.setItem('taskflow-tasks', JSON.stringify(tasks))
     updateProjectTaskCounts()
   }, [tasks])
 
-  useEffect(() => {
-    localStorage.setItem('taskflow-projects', JSON.stringify(projects))
-  }, [projects])
+  const loadTasks = async () => {
+    setIsLoadingTasks(true)
+    try {
+      const fetchedTasks = await TaskService.fetchTasks()
+      setTasks(fetchedTasks || [])
+    } catch (error) {
+      console.error('Error loading tasks:', error)
+      toast.error('Failed to load tasks. Please try again.')
+      setTasks([])
+    } finally {
+      setIsLoadingTasks(false)
+    }
+  }
 
   const updateProjectTaskCounts = () => {
     const updatedProjects = projects.map(project => ({
@@ -55,11 +58,10 @@ const [selectedProject, setSelectedProject] = useState('personal')
       taskCount: tasks.filter(task => task.projectId === project.id).length
     }))
     setProjects(updatedProjects)
-  }
+}
 
-const handleSubmitTask = async (e) => {
+  const handleSubmitTask = async (e) => {
     e.preventDefault()
-    
     if (!taskForm.title.trim()) {
       toast.error('Task title is required')
       return
@@ -68,23 +70,32 @@ const handleSubmitTask = async (e) => {
     setIsSubmittingTask(true)
     
     try {
+      // Prepare task data for Apper backend
       const taskData = {
-        ...taskForm,
-        id: editingTask ? editingTask.id : Date.now().toString(),
-        projectId: selectedProject,
-        createdAt: editingTask ? editingTask.createdAt : new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        Name: taskForm.title, // Map UI field to database field
+        title: taskForm.title,
+        description: taskForm.description,
+        due_date: taskForm.dueDate, // Ensure date format is YYYY-MM-DD
+        priority: taskForm.priority,
+        status: taskForm.status,
+        project: selectedProject, // This should be a project ID from the database
+        Tags: '' // Initialize as empty string for Tag field type
       }
 
       if (editingTask) {
-        setTasks(prev => prev.map(task => task.id === editingTask.id ? taskData : task))
+        // Update existing task
+        const updatedTask = await TaskService.updateTask(editingTask.Id, taskData)
+        setTasks(prev => prev.map(task => task.Id === editingTask.Id ? updatedTask : task))
         toast.success('Task updated successfully!')
         setEditingTask(null)
       } else {
-        setTasks(prev => [...prev, taskData])
+        // Create new task
+        const newTask = await TaskService.createTask(taskData)
+        setTasks(prev => [...prev, newTask])
         toast.success('Task created successfully!')
       }
 
+      // Reset form
       setTaskForm({
         title: '',
         description: '',
@@ -93,38 +104,66 @@ const handleSubmitTask = async (e) => {
         status: 'pending'
       })
       setShowTaskForm(false)
+      
+      // Reload tasks to ensure UI is in sync with database
+      await loadTasks()
     } catch (error) {
       console.error('Error submitting task:', error)
       toast.error('Failed to save task. Please try again.')
     } finally {
       setIsSubmittingTask(false)
     }
-  }
+}
 
   const handleEditTask = (task) => {
     setEditingTask(task)
     setTaskForm({
-      title: task.title,
-      description: task.description,
-      dueDate: task.dueDate,
-      priority: task.priority,
-      status: task.status
+      title: task.title || task.Name || '',
+      description: task.description || '',
+      dueDate: task.due_date || '',
+      priority: task.priority || 'medium',
+      status: task.status || 'pending'
     })
-    setSelectedProject(task.projectId)
+    setSelectedProject(task.project || 'personal')
     setShowTaskForm(true)
   }
 
-  const handleDeleteTask = (taskId) => {
-    setTasks(prev => prev.filter(task => task.id !== taskId))
-    toast.success('Task deleted successfully!')
-  }
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) {
+      return
+    }
 
-  const handleToggleStatus = (taskId) => {
-    setTasks(prev => prev.map(task => 
-      task.id === taskId 
-        ? { ...task, status: task.status === 'completed' ? 'pending' : 'completed', updatedAt: new Date().toISOString() }
-        : task
-    ))
+    setIsDeletingTask(taskId)
+    try {
+      const success = await TaskService.deleteTask(taskId)
+      if (success) {
+        setTasks(prev => prev.filter(task => task.Id !== taskId))
+        toast.success('Task deleted successfully!')
+      } else {
+        toast.error('Failed to delete task. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      toast.error('Failed to delete task. Please try again.')
+    } finally {
+      setIsDeletingTask(null)
+    }
+}
+
+  const handleToggleStatus = async (taskId) => {
+    const task = tasks.find(t => t.Id === taskId)
+    if (!task) return
+
+    const newStatus = task.status === 'completed' ? 'pending' : 'completed'
+    
+    try {
+      const updatedTask = await TaskService.updateTask(taskId, { status: newStatus })
+      setTasks(prev => prev.map(t => t.Id === taskId ? updatedTask : t))
+      toast.success(`Task marked as ${newStatus}`)
+    } catch (error) {
+      console.error('Error updating task status:', error)
+      toast.error('Failed to update task status. Please try again.')
+    }
   }
 
   const getPriorityIcon = (priority) => {
@@ -144,26 +183,28 @@ const handleSubmitTask = async (e) => {
       completed: 'CheckCircle'
     }
     return icons[status] || 'Clock'
-  }
+}
 
   const filteredTasks = tasks
     .filter(task => {
-      if (filter === 'project') return task.projectId === selectedProject
-      if (filter === 'today') return task.dueDate && isToday(parseISO(task.dueDate))
-      if (filter === 'overdue') return task.dueDate && isPast(parseISO(task.dueDate)) && task.status !== 'completed'
+      if (filter === 'project') return (task.project || task.projectId) === selectedProject
+      if (filter === 'today') return task.due_date && isToday(parseISO(task.due_date))
+      if (filter === 'overdue') return task.due_date && isPast(parseISO(task.due_date)) && task.status !== 'completed'
       if (filter === 'completed') return task.status === 'completed'
       return true
     })
-    .filter(task => 
-      task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    .filter(task => {
+      const title = task.title || task.Name || ''
+      const description = task.description || ''
+      const searchLower = searchTerm.toLowerCase()
+      return title.toLowerCase().includes(searchLower) || description.toLowerCase().includes(searchLower)
+    })
     .sort((a, b) => {
       if (a.status === 'completed' && b.status !== 'completed') return 1
       if (a.status !== 'completed' && b.status === 'completed') return -1
       
       const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 }
-      return priorityOrder[b.priority] - priorityOrder[a.priority]
+      return (priorityOrder[b.priority] || 2) - (priorityOrder[a.priority] || 2)
     })
 
   return (
@@ -294,68 +335,73 @@ const handleSubmitTask = async (e) => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
               />
-            </div>
+</div>
           </motion.div>
 
-          {/* Tasks List */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-3"
-          >
-            <AnimatePresence>
-              {filteredTasks.length === 0 ? (
+          <AnimatePresence>
+            {isLoadingTasks ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="glass-card rounded-xl p-8 text-center"
+              >
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                <p className="text-surface-600 dark:text-surface-400">Loading tasks...</p>
+              </motion.div>
+            ) : filteredTasks.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="glass-card rounded-xl p-8 text-center"
+              >
+                <ApperIcon name="CheckSquare" className="w-16 h-16 mx-auto mb-4 text-surface-400" />
+                <h3 className="text-lg font-semibold text-surface-700 dark:text-surface-300 mb-2">
+                  No tasks found
+                </h3>
+                <p className="text-surface-500 dark:text-surface-400">
+                  Create your first task to get started!
+                </p>
+              </motion.div>
+            ) : (
+              filteredTasks.map((task, index) => (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="glass-card rounded-xl p-8 text-center"
+                  key={task.Id || task.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ delay: index * 0.05 }}
+transition={{ delay: index * 0.05 }}
+                  className={`task-card ${task.status === 'completed' ? 'opacity-75' : ''}`}
                 >
-                  <ApperIcon name="CheckSquare" className="w-16 h-16 mx-auto mb-4 text-surface-400" />
-                  <h3 className="text-lg font-semibold text-surface-700 dark:text-surface-300 mb-2">
-                    No tasks found
-                  </h3>
-                  <p className="text-surface-500 dark:text-surface-400">
-                    Create your first task to get started!
-                  </p>
-                </motion.div>
-              ) : (
-                filteredTasks.map((task, index) => (
-                  <motion.div
-                    key={task.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ delay: index * 0.05 }}
-                    className={`task-card ${task.status === 'completed' ? 'opacity-75' : ''}`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-3 flex-1">
-                        <motion.button
-                          onClick={() => handleToggleStatus(task.id)}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-                            task.status === 'completed'
-                              ? 'bg-green-500 border-green-500 text-white'
-                              : 'border-surface-300 dark:border-surface-600 hover:border-green-500'
-                          }`}
-                        >
-                          {task.status === 'completed' && <ApperIcon name="Check" className="w-4 h-4" />}
-                        </motion.button>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-3 flex-1">
+                      <motion.button
+                        onClick={() => handleToggleStatus(task.Id || task.id)}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                          task.status === 'completed'
+                            ? 'bg-green-500 border-green-500 text-white'
+                            : 'border-surface-300 dark:border-surface-600 hover:border-green-500'
+                        }`}
+                      >
+                        {task.status === 'completed' && <ApperIcon name="Check" className="w-4 h-4" />}
+                      </motion.button>
+                      
+                      <div className="flex-1 min-w-0">
+                        <h4 className={`font-semibold text-surface-900 dark:text-surface-100 ${
+<h4 className={`font-semibold text-surface-900 dark:text-surface-100 ${
+                          task.status === 'completed' ? 'line-through' : ''
+                        }`}>
+                          {task.title || task.Name || 'Untitled Task'}
+                        </h4>
+                        {task.description && (
+                          <p className="text-sm text-surface-600 dark:text-surface-400 mt-1">
+                            {task.description}
+                          </p>
+                        )}
                         
-                        <div className="flex-1 min-w-0">
-                          <h4 className={`font-semibold text-surface-900 dark:text-surface-100 ${
-                            task.status === 'completed' ? 'line-through' : ''
-                          }`}>
-                            {task.title}
-                          </h4>
-                          {task.description && (
-                            <p className="text-sm text-surface-600 dark:text-surface-400 mt-1">
-                              {task.description}
-                            </p>
-                          )}
-                          
-                          <div className="flex flex-wrap items-center gap-2 mt-3">
+                        <div className="flex flex-wrap items-center gap-2 mt-3">
                             {/* Priority Badge */}
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border priority-${task.priority}`}>
                               <ApperIcon name={getPriorityIcon(task.priority)} className="w-3 h-3 mr-1" />
@@ -367,16 +413,15 @@ const handleSubmitTask = async (e) => {
                               <ApperIcon name={getStatusIcon(task.status)} className="w-3 h-3 mr-1" />
                               {task.status}
                             </span>
-                            
-                            {/* Due Date */}
-                            {task.dueDate && (
+{/* Due Date */}
+                            {task.due_date && (
                               <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                isPast(parseISO(task.dueDate)) && task.status !== 'completed'
+                                isPast(parseISO(task.due_date)) && task.status !== 'completed'
                                   ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                                   : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                               }`}>
                                 <ApperIcon name="Calendar" className="w-3 h-3 mr-1" />
-                                {format(parseISO(task.dueDate), 'MMM dd')}
+                                {format(parseISO(task.due_date), 'MMM dd')}
                               </span>
                             )}
                           </div>
@@ -391,23 +436,27 @@ const handleSubmitTask = async (e) => {
                           className="p-2 text-surface-500 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-all duration-200"
                         >
                           <ApperIcon name="Edit2" className="w-4 h-4" />
-                        </motion.button>
+</motion.button>
                         
                         <motion.button
-                          onClick={() => handleDeleteTask(task.id)}
+                          onClick={() => handleDeleteTask(task.Id || task.id)}
+                          disabled={isDeletingTask === (task.Id || task.id)}
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
-                          className="p-2 text-surface-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200"
+                          className="p-2 text-surface-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <ApperIcon name="Trash2" className="w-4 h-4" />
+                          {isDeletingTask === (task.Id || task.id) ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                          ) : (
+                            <ApperIcon name="Trash2" className="w-4 h-4" />
+                          )}
                         </motion.button>
                       </div>
                     </div>
                   </motion.div>
-                ))
+))
               )}
-            </AnimatePresence>
-          </motion.div>
+          </AnimatePresence>
         </div>
       </div>
 
@@ -522,9 +571,9 @@ const handleSubmitTask = async (e) => {
                       onClick={() => setShowTaskForm(false)}
                       className="flex-1 px-4 py-3 bg-surface-100 dark:bg-surface-700 text-surface-700 dark:text-surface-300 font-medium rounded-lg hover:bg-surface-200 dark:hover:bg-surface-600 transition-all duration-200"
                     >
-                      Cancel
+Cancel
                     </button>
-<button
+                    <button
                       type="submit"
                       disabled={isSubmittingTask}
                       className="flex-1 px-4 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white font-medium rounded-lg hover:shadow-card transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -540,9 +589,9 @@ const handleSubmitTask = async (e) => {
                     </button>
                   </div>
                 </form>
-              </div>
+</div>
             </motion.div>
-</motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
