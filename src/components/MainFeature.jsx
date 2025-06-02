@@ -332,10 +332,10 @@ const MainFeature = () => {
                 type="text"
                 placeholder="Search tasks..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
               />
-</div>
+            </div>
           </motion.div>
 
           <AnimatePresence>
@@ -367,10 +367,9 @@ const MainFeature = () => {
                 <motion.div
                   key={task.Id || task.id}
                   initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
+animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ delay: index * 0.05 }}
-transition={{ delay: index * 0.05 }}
                   className={`task-card ${task.status === 'completed' ? 'opacity-75' : ''}`}
                 >
                   <div className="flex items-start justify-between">
@@ -388,9 +387,8 @@ transition={{ delay: index * 0.05 }}
                         {task.status === 'completed' && <ApperIcon name="Check" className="w-4 h-4" />}
                       </motion.button>
                       
-                      <div className="flex-1 min-w-0">
+<div className="flex-1 min-w-0">
                         <h4 className={`font-semibold text-surface-900 dark:text-surface-100 ${
-<h4 className={`font-semibold text-surface-900 dark:text-surface-100 ${
                           task.status === 'completed' ? 'line-through' : ''
                         }`}>
                           {task.title || task.Name || 'Untitled Task'}
@@ -410,10 +408,10 @@ transition={{ delay: index * 0.05 }}
                             
                             {/* Status Badge */}
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-surface-100 dark:bg-surface-700 text-surface-700 dark:text-surface-300">
-                              <ApperIcon name={getStatusIcon(task.status)} className="w-3 h-3 mr-1" />
-                              {task.status}
+{task.status}
                             </span>
-{/* Due Date */}
+                            
+                            {/* Due Date */}
                             {task.due_date && (
                               <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                 isPast(parseISO(task.due_date)) && task.status !== 'completed'
@@ -433,10 +431,10 @@ transition={{ delay: index * 0.05 }}
                           onClick={() => handleEditTask(task)}
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
-                          className="p-2 text-surface-500 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-all duration-200"
+className="p-2 text-surface-500 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-all duration-200"
                         >
                           <ApperIcon name="Edit2" className="w-4 h-4" />
-</motion.button>
+                        </motion.button>
                         
                         <motion.button
                           onClick={() => handleDeleteTask(task.Id || task.id)}
@@ -568,10 +566,10 @@ transition={{ delay: index * 0.05 }}
                   <div className="flex space-x-3 pt-4">
                     <button
                       type="button"
-                      onClick={() => setShowTaskForm(false)}
+onClick={() => setShowTaskForm(false)}
                       className="flex-1 px-4 py-3 bg-surface-100 dark:bg-surface-700 text-surface-700 dark:text-surface-300 font-medium rounded-lg hover:bg-surface-200 dark:hover:bg-surface-600 transition-all duration-200"
                     >
-Cancel
+                      Cancel
                     </button>
                     <button
                       type="submit"
@@ -586,10 +584,10 @@ Cancel
                       ) : (
                         editingTask ? 'Update Task' : 'Create Task'
                       )}
-                    </button>
+</button>
                   </div>
                 </form>
-</div>
+              </div>
             </motion.div>
           </motion.div>
         )}
